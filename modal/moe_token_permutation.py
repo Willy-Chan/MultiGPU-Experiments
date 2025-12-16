@@ -16,6 +16,11 @@ TOP_K = 1                   # routing choices per token (this toy implements TOP
 
 
 
+# FORWARD DISPATCH
+#   Can overlap: start processing tokens for expert 0 while still receiving tokens for expert 1 instead of waiting for all2all to finish
+#   Avoid having to pack into the all2all and doing the unpacking
+#   Better if one expert has a bigger load: don't want to wait for the slowest expert toc complete
+
 
 def train(rank, world_size):
     # Set up environment for distributed training

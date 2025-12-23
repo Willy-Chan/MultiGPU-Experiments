@@ -1,17 +1,18 @@
 # NCCL
 
 ## Summary
-In the Jacobi kernel example, MPI_sendrecv doesn't have a stream argument.
+NCCL is basically just a library of kernels. These kernels just happen to specifically do data transfer, and they are highly optimized and adapt to your hardware topology.
 
-So we have to synchronize streams for the top and bottom parts: can't automatically overlap them/have them be at the same time here:
+We *could* just do the data transfer with MPI, but it's not as optimized as NCCL. For example, in the Jacobi kernel, MPI_sendrecv doesn't have a stream argument, i.e. we can't automatically enqueue them onto separate CUDA streams easily.
+
+CUDA-aware MPI primarily uses the *copy engine*, while NCCL primarily uses *load-store instructions*.
+
+As a general rule of thumb, CUDA-MPI is better for P2P tasks, NCCL is better for larger collective operations.
 
 ![Can't remove the stream sync](cantremovesync.png)
 
-Ideally these two sendrecvs happen at the same time (different streams), but MPI cant accept this argument!
 
-
-NCCL basically lets you add this stream support. Think CUDA-aware MPI, but instead of calling MPI we're calling dedicated communication kernels, *with stream support*.
-
+## Writing a NCCL Program
 You initialize NCCL by just piggybacking off of MPI: you broadcast the NCCLUid and that's what you need to set everything up. (can use both NCCL and MPI)
 ```c
 MPI_Init(&argc, &argv);
@@ -29,6 +30,13 @@ ncclCommInitRank(&nccl_comm, size, nccl_uid, rank);
 ncclCommDestroy(nccl_comm);
 MPI_Finalize();
 ```
+
+- Every rank runs their own process and doesn't know about any of the others: they can only communicate using MPI.
+
+- Hence, they use MPI to broadcast the port, communicator group ID, and IP of rank 0. The NCCL library can't just auto-"find" every other GPU!
+
+- You don't HAVE to use MPI: you could theoretically write the UID to a shared file... or use sockets... or TCP/IP protocol!
+
 
 - Use `ncclGroupStart()` and `ncclGroupEnd()` around nccl operations you want to aggregate: that way you pay the launch overhead only once. (put around multiple ncclAllReduce calls)
 
